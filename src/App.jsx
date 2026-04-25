@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 const ORANGE = "#E8740C";
 const ORANGE_LIGHT = "#FFF3E8";
@@ -13,15 +13,32 @@ function loadTasks() {
     const saved = localStorage.getItem("task-orange-tasks");
     if (saved) return JSON.parse(saved);
   } catch {}
-  return [
-    { id: 1, name: "Conferência diária", time: "09:30", tag: "Reunião", repeat: true, done: false },
-    { id: 2, name: "Reunião com gerente", time: "14:00", tag: "Reunião", repeat: false, done: true },
-    { id: 3, name: "Caixa — fechamento", time: "16:30", tag: "Recolhimento", repeat: true, done: true },
-  ];
+  return [];
 }
-
 function saveTasks(tasks) {
   try { localStorage.setItem("task-orange-tasks", JSON.stringify(tasks)); } catch {}
+}
+function loadSettings() {
+  try {
+    const saved = localStorage.getItem("task-orange-settings");
+    if (saved) return JSON.parse(saved);
+  } catch {}
+  return { notifications: true, sound: true, antecedencia: 5 };
+}
+function saveSettings(s) {
+  try { localStorage.setItem("task-orange-settings", JSON.stringify(s)); } catch {}
+}
+
+/* ─── Notifications ─── */
+function requestNotificationPermission() {
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+}
+function sendNotification(title, body) {
+  if ("Notification" in window && Notification.permission === "granted") {
+    new Notification(title, { body, icon: "/icon-192.png", badge: "/icon-192.png" });
+  }
 }
 
 /* ─── Global Styles ─── */
@@ -31,36 +48,12 @@ function GlobalStyles() {
       @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&display=swap');
       @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
       @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
+      @keyframes slideIn { from { opacity:0; transform: translateX(20px) } to { opacity:1; transform: translateX(0) } }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
       input::placeholder { color: #BBB7B2; }
       body { overscroll-behavior: none; }
       ::-webkit-scrollbar { display: none; }
     `}</style>
-  );
-}
-
-/* ─── Status Bar ─── */
-function StatusBar() {
-  const [time, setTime] = useState("");
-  useEffect(() => {
-    const update = () => {
-      const now = new Date();
-      setTime(`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`);
-    };
-    update();
-    const i = setInterval(update, 30000);
-    return () => clearInterval(i);
-  }, []);
-
-  return (
-    <div style={{
-      display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "env(safe-area-inset-top, 8px) 20px 4px",
-      fontSize: 15, fontWeight: 600,
-    }}>
-      <span>{time}</span>
-      <div style={{ flex: 1 }} />
-    </div>
   );
 }
 
@@ -109,19 +102,48 @@ function RepeatIcon({ size = 18, color = GRAY_TEXT }) {
   );
 }
 
-function PhoneIcon({ size = 18, color = GRAY_TEXT }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
-      <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-      <line x1="12" y1="18" x2="12.01" y2="18" />
-    </svg>
-  );
-}
-
 function CheckIcon({ size = 14, color = "#6B9B5E" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function TrashIcon({ size = 18, color = "#D85A30" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
+}
+
+function BellIcon({ size = 18, color = GRAY_TEXT }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  );
+}
+
+function VolumeIcon({ size = 18, color = GRAY_TEXT }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  );
+}
+
+function ClockSettingIcon({ size = 18, color = GRAY_TEXT }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+      <circle cx="19" cy="19" r="4" fill="var(--bg, #fff)" stroke={color} strokeWidth="1.5"/>
+      <text x="19" y="20.5" textAnchor="middle" fill={color} fontSize="7" fontWeight="600" fontFamily="sans-serif">5</text>
     </svg>
   );
 }
@@ -136,7 +158,6 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
   const [minuto, setMinuto] = useState("00");
   const [selectedTime, setSelectedTime] = useState("10:00");
   const [repetir, setRepetir] = useState(true);
-  const [alarme, setAlarme] = useState(true);
   const [feedback, setFeedback] = useState(false);
 
   const tags = ["Recolhimento", "Eventuais", "Reunião", "Painel CEI"];
@@ -152,7 +173,10 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
     const diff = Math.round((target - now) / 60000);
     if (diff < 0) return "amanhã";
     if (diff === 0) return "agora";
-    return `em ${diff} min`;
+    if (diff < 60) return `em ${diff} min`;
+    const hrs = Math.floor(diff / 60);
+    const mins = diff % 60;
+    return mins > 0 ? `em ${hrs}h ${mins}min` : `em ${hrs}h`;
   };
 
   const handleCriar = () => {
@@ -164,6 +188,7 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
       tag: selectedTag,
       repeat: repetir,
       done: false,
+      notified: false,
     });
     setNome("");
     setSelectedTag(null);
@@ -173,12 +198,10 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
 
   return (
     <div style={{ background: "#fff", minHeight: "100%", display: "flex", flexDirection: "column" }}>
-      <StatusBar />
-
       {/* Feedback toast */}
       {feedback && (
         <div style={{
-          position: "fixed", top: 60, left: "50%", transform: "translateX(-50%)",
+          position: "fixed", top: 20, left: "50%", transform: "translateX(-50%)",
           background: DARK, color: "#fff", padding: "10px 24px", borderRadius: 12,
           fontSize: 14, fontWeight: 500, zIndex: 200,
           animation: "fadeIn 0.2s ease", boxShadow: "0 4px 20px rgba(0,0,0,0.2)",
@@ -253,21 +276,21 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16 }}>
           <AlarmIcon size={22} />
-          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
             <input value={hora}
-              onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 2); setHora(v); }}
+              onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 2); setHora(v); setSelectedTime(""); }}
               style={{
-                width: 56, height: 56, textAlign: "center",
-                fontSize: 36, fontWeight: 300, border: "none",
+                width: 48, height: 52, textAlign: "center",
+                fontSize: 32, fontWeight: 300, border: "none",
                 background: "transparent", color: DARK, outline: "none",
               }}
             />
-            <span style={{ fontSize: 36, fontWeight: 300, color: DARK }}>:</span>
+            <span style={{ fontSize: 32, fontWeight: 300, color: DARK, marginLeft: -4, marginRight: -4 }}>:</span>
             <input value={minuto}
-              onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 2); setMinuto(v); }}
+              onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 2); setMinuto(v); setSelectedTime(""); }}
               style={{
-                width: 56, height: 56, textAlign: "center",
-                fontSize: 36, fontWeight: 300, border: "none",
+                width: 48, height: 52, textAlign: "center",
+                fontSize: 32, fontWeight: 300, border: "none",
                 background: "transparent", color: DARK, outline: "none",
               }}
             />
@@ -292,28 +315,16 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
           ))}
         </div>
 
-        {/* Toggles */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <RepeatIcon size={18} />
-              <div>
-                <div style={{ fontSize: 15, color: DARK, fontWeight: 500 }}>Repetir todos os dias</div>
-                <div style={{ fontSize: 12, color: GRAY_TEXT }}>Tarefa fixa de rotina</div>
-              </div>
+        {/* Toggle repetir */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <RepeatIcon size={18} />
+            <div>
+              <div style={{ fontSize: 15, color: DARK, fontWeight: 500 }}>Repetir todos os dias</div>
+              <div style={{ fontSize: 12, color: GRAY_TEXT }}>Tarefa fixa de rotina</div>
             </div>
-            <Toggle on={repetir} onToggle={() => setRepetir(!repetir)} />
           </div>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <PhoneIcon size={18} />
-              <div>
-                <div style={{ fontSize: 15, color: DARK, fontWeight: 500 }}>Criar alarme no iPhone</div>
-                <div style={{ fontSize: 12, color: GRAY_TEXT }}>Via app Atalhos</div>
-              </div>
-            </div>
-            <Toggle on={alarme} onToggle={() => setAlarme(!alarme)} />
-          </div>
+          <Toggle on={repetir} onToggle={() => setRepetir(!repetir)} />
         </div>
       </div>
 
@@ -341,26 +352,73 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
 /* ═══════════════════════════════════════════════ */
 /*  TELA TIMELINE                                 */
 /* ═══════════════════════════════════════════════ */
-function TelaTimeline({ onNavigate, tasks, onToggleTask, onAddTask }) {
+function TelaTimeline({ onNavigate, tasks, onToggleTask, onDeleteTask, onAddTask }) {
   const [showModal, setShowModal] = useState(false);
+  const [swipedId, setSwipedId] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
   const sorted = [...tasks].sort((a, b) => a.time.localeCompare(b.time));
+
+  const handleDelete = (id) => {
+    setConfirmDelete(id);
+  };
+
+  const confirmDeleteTask = (id) => {
+    onDeleteTask(id);
+    setConfirmDelete(null);
+    setSwipedId(null);
+  };
 
   return (
     <div style={{ background: "#fff", minHeight: "100%", display: "flex", flexDirection: "column", position: "relative" }}>
-      <StatusBar />
-      <div style={{ padding: "8px 20px 16px" }}>
+      <div style={{ padding: "16px 20px 12px" }}>
         <h1 style={{ fontSize: 22, fontWeight: 600, color: DARK, margin: "0 0 4px" }}>Lembretes</h1>
         <p style={{ fontSize: 13, color: GRAY_TEXT, margin: 0 }}>Timeline do dia</p>
       </div>
 
+      {/* Confirm delete modal */}
+      {confirmDelete && (
+        <div style={{
+          position: "absolute", inset: 0, background: "rgba(0,0,0,0.35)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 100, animation: "fadeIn 0.15s ease", padding: 20,
+        }} onClick={() => setConfirmDelete(null)}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "#fff", borderRadius: 16, padding: "24px 20px",
+            width: "100%", maxWidth: 320, animation: "slideUp 0.2s ease",
+          }}>
+            <div style={{ fontSize: 17, fontWeight: 600, color: DARK, marginBottom: 8 }}>Excluir tarefa?</div>
+            <div style={{ fontSize: 14, color: GRAY_TEXT, marginBottom: 20 }}>
+              Essa ação não pode ser desfeita.
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => setConfirmDelete(null)}
+                style={{
+                  flex: 1, padding: "12px", borderRadius: 12,
+                  background: GRAY_BG, color: DARK,
+                  fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+                }}
+              >Cancelar</button>
+              <button onClick={() => confirmDeleteTask(confirmDelete)}
+                style={{
+                  flex: 1, padding: "12px", borderRadius: 12,
+                  background: "#D85A30", color: "#fff",
+                  fontSize: 14, fontWeight: 600, border: "none", cursor: "pointer",
+                }}
+              >Excluir</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div style={{ flex: 1, padding: "0 20px", overflowY: "auto" }}>
         {sorted.length === 0 && (
           <div style={{ textAlign: "center", padding: "40px 0", color: GRAY_TEXT, fontSize: 15 }}>
-            Nenhum lembrete ainda.
+            Nenhum lembrete ainda.<br/>
+            <span style={{ fontSize: 13 }}>Crie o primeiro na tela inicial.</span>
           </div>
         )}
         {sorted.map((task, i) => (
-          <div key={task.id} style={{ display: "flex", gap: 16, position: "relative" }}>
+          <div key={task.id} style={{ display: "flex", gap: 16, position: "relative", animation: "slideIn 0.3s ease" }}>
             <div style={{ width: 50, textAlign: "right", paddingTop: 14, flexShrink: 0 }}>
               <span style={{ fontSize: 14, color: GRAY_TEXT, fontWeight: 500 }}>{task.time}</span>
             </div>
@@ -374,33 +432,49 @@ function TelaTimeline({ onNavigate, tasks, onToggleTask, onAddTask }) {
                 <div style={{ width: 2, flex: 1, background: GRAY_BORDER, minHeight: 40 }} />
               )}
             </div>
-            <div onClick={() => onToggleTask(task.id)}
-              style={{
-                flex: 1, padding: "14px 16px", marginBottom: 8,
-                background: task.done ? "#FAFAF8" : "#fff",
-                borderRadius: 12,
-                border: `1px solid ${task.done ? GRAY_BORDER : ORANGE + "40"}`,
-                cursor: "pointer", transition: "all 0.2s",
-                opacity: task.done ? 0.7 : 1,
-              }}
-            >
-              <span style={{
-                fontSize: 15, fontWeight: 500, color: DARK,
-                textDecoration: task.done ? "line-through" : "none",
-              }}>{task.name}</span>
-              {task.done && (
-                <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
-                  <CheckIcon size={12} />
-                  <span style={{ fontSize: 12, color: "#6B9B5E" }}>Concluída</span>
-                </div>
-              )}
-              {task.tag && !task.done && (
-                <div style={{ marginTop: 4 }}>
-                  <span style={{ fontSize: 11, color: ORANGE, background: ORANGE_LIGHT, padding: "2px 8px", borderRadius: 8 }}>
-                    {task.tag}
-                  </span>
-                </div>
-              )}
+            <div style={{ flex: 1, marginBottom: 8, display: "flex", gap: 8, alignItems: "stretch" }}>
+              {/* Task card */}
+              <div onClick={() => onToggleTask(task.id)}
+                style={{
+                  flex: 1, padding: "14px 16px",
+                  background: task.done ? "#FAFAF8" : "#fff",
+                  borderRadius: 12,
+                  border: `1px solid ${task.done ? GRAY_BORDER : ORANGE + "40"}`,
+                  cursor: "pointer", transition: "all 0.2s",
+                  opacity: task.done ? 0.7 : 1,
+                }}
+              >
+                <span style={{
+                  fontSize: 15, fontWeight: 500, color: DARK,
+                  textDecoration: task.done ? "line-through" : "none",
+                }}>{task.name}</span>
+                {task.done && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 4 }}>
+                    <CheckIcon size={12} />
+                    <span style={{ fontSize: 12, color: "#6B9B5E" }}>Concluída</span>
+                  </div>
+                )}
+                {task.tag && !task.done && (
+                  <div style={{ marginTop: 4 }}>
+                    <span style={{ fontSize: 11, color: ORANGE, background: ORANGE_LIGHT, padding: "2px 8px", borderRadius: 8 }}>
+                      {task.tag}
+                    </span>
+                  </div>
+                )}
+              </div>
+              {/* Delete button */}
+              <button onClick={() => handleDelete(task.id)}
+                style={{
+                  width: 40, borderRadius: 12,
+                  background: "#FEF0EC",
+                  border: `1px solid #F5C4B3`,
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "all 0.15s",
+                }}
+              >
+                <TrashIcon size={16} />
+              </button>
             </div>
           </div>
         ))}
@@ -431,6 +505,142 @@ function TelaTimeline({ onNavigate, tasks, onToggleTask, onAddTask }) {
 }
 
 /* ═══════════════════════════════════════════════ */
+/*  TELA CONFIG                                   */
+/* ═══════════════════════════════════════════════ */
+function TelaConfig({ onNavigate, settings, onUpdateSettings, tasks, onClearDone }) {
+  const doneCount = tasks.filter(t => t.done).length;
+  const totalCount = tasks.length;
+  const notifPermission = "Notification" in window ? Notification.permission : "denied";
+
+  const handleRequestNotif = () => {
+    if ("Notification" in window) {
+      Notification.requestPermission().then(perm => {
+        if (perm === "granted") {
+          onUpdateSettings({ ...settings, notifications: true });
+          sendNotification("Task Orange", "Notificações ativadas!");
+        }
+      });
+    }
+  };
+
+  return (
+    <div style={{ background: "#fff", minHeight: "100%", display: "flex", flexDirection: "column" }}>
+      <div style={{ padding: "16px 20px 12px" }}>
+        <h1 style={{ fontSize: 22, fontWeight: 600, color: DARK, margin: "0 0 4px" }}>Configurações</h1>
+        <p style={{ fontSize: 13, color: GRAY_TEXT, margin: 0 }}>Personalize seu app</p>
+      </div>
+
+      <div style={{ padding: "8px 20px", flex: 1 }}>
+        {/* Stats card */}
+        <div style={{ background: GRAY_BG, borderRadius: 16, padding: "16px 20px", marginBottom: 24 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: GRAY_TEXT, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 }}>
+            Resumo do dia
+          </div>
+          <div style={{ display: "flex", gap: 16 }}>
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 300, color: DARK }}>{totalCount}</div>
+              <div style={{ fontSize: 12, color: GRAY_TEXT }}>Total</div>
+            </div>
+            <div style={{ width: 1, background: GRAY_BORDER }} />
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 300, color: "#6B9B5E" }}>{doneCount}</div>
+              <div style={{ fontSize: 12, color: GRAY_TEXT }}>Concluídas</div>
+            </div>
+            <div style={{ width: 1, background: GRAY_BORDER }} />
+            <div style={{ flex: 1, textAlign: "center" }}>
+              <div style={{ fontSize: 28, fontWeight: 300, color: ORANGE }}>{totalCount - doneCount}</div>
+              <div style={{ fontSize: 12, color: GRAY_TEXT }}>Pendentes</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Notifications */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: GRAY_TEXT, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12 }}>
+          Notificações
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <BellIcon size={18} />
+              <div>
+                <div style={{ fontSize: 15, color: DARK, fontWeight: 500 }}>Notificações</div>
+                <div style={{ fontSize: 12, color: GRAY_TEXT }}>
+                  {notifPermission === "granted" ? "Ativadas" : notifPermission === "denied" ? "Bloqueadas no navegador" : "Desativadas"}
+                </div>
+              </div>
+            </div>
+            {notifPermission === "granted" ? (
+              <Toggle on={settings.notifications} onToggle={() => onUpdateSettings({ ...settings, notifications: !settings.notifications })} />
+            ) : (
+              <button onClick={handleRequestNotif} style={{
+                padding: "6px 14px", borderRadius: 10,
+                background: ORANGE, color: "#fff",
+                fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer",
+              }}>Ativar</button>
+            )}
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <VolumeIcon size={18} />
+              <div>
+                <div style={{ fontSize: 15, color: DARK, fontWeight: 500 }}>Som de alerta</div>
+                <div style={{ fontSize: 12, color: GRAY_TEXT }}>Vibrar ao notificar</div>
+              </div>
+            </div>
+            <Toggle on={settings.sound} onToggle={() => onUpdateSettings({ ...settings, sound: !settings.sound })} />
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <AlarmIcon size={18} color={GRAY_TEXT} />
+              <div>
+                <div style={{ fontSize: 15, color: DARK, fontWeight: 500 }}>Antecedência</div>
+                <div style={{ fontSize: 12, color: GRAY_TEXT }}>Avisar antes do horário</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {[0, 5, 10, 15].map(m => (
+                <button key={m} onClick={() => onUpdateSettings({ ...settings, antecedencia: m })}
+                  style={{
+                    padding: "5px 10px", borderRadius: 10,
+                    border: `1.5px solid ${settings.antecedencia === m ? ORANGE : GRAY_BORDER}`,
+                    background: settings.antecedencia === m ? ORANGE : "transparent",
+                    color: settings.antecedencia === m ? "#fff" : GRAY_TEXT,
+                    fontSize: 12, fontWeight: 500, cursor: "pointer",
+                  }}
+                >{m === 0 ? "Na hora" : `${m}min`}</button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Ações */}
+        <div style={{ fontSize: 11, fontWeight: 600, color: GRAY_TEXT, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 12 }}>
+          Ações
+        </div>
+
+        {doneCount > 0 && (
+          <button onClick={onClearDone} style={{
+            width: "100%", padding: "14px 16px", borderRadius: 12,
+            background: "#FEF0EC", border: `1px solid #F5C4B3`,
+            color: "#D85A30", fontSize: 14, fontWeight: 500,
+            cursor: "pointer", textAlign: "left",
+            display: "flex", alignItems: "center", gap: 12,
+          }}>
+            <TrashIcon size={16} />
+            Limpar {doneCount} tarefa{doneCount > 1 ? "s" : ""} concluída{doneCount > 1 ? "s" : ""}
+          </button>
+        )}
+      </div>
+
+      <BottomNav active="config" onNavigate={onNavigate} />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════ */
 /*  MODAL NOVA TAREFA                             */
 /* ═══════════════════════════════════════════════ */
 function ModalNovaTarefa({ onClose, onAdd }) {
@@ -445,7 +655,7 @@ function ModalNovaTarefa({ onClose, onAdd }) {
       id: Date.now(),
       name: nome,
       time: `${hora.padStart(2, "0")}:${minuto.padStart(2, "0")}`,
-      tag: null, repeat: repetir, done: false,
+      tag: null, repeat: repetir, done: false, notified: false,
     });
   };
 
@@ -560,8 +770,8 @@ function BottomNav({ active, onNavigate }) {
       {items.map(item => {
         const color = active === item.key ? ORANGE : GRAY_TEXT;
         return (
-          <button key={item.key} onClick={() => item.key !== "config" && onNavigate(item.key)}
-            style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}
+          <button key={item.key} onClick={() => onNavigate(item.key)}
+            style={{ background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, flex: 1 }}
           >
             {item.icon(color)}
             <span style={{ fontSize: 10, color, fontWeight: 600 }}>{item.label}</span>
@@ -578,11 +788,67 @@ function BottomNav({ active, onNavigate }) {
 export default function TaskOrange() {
   const [screen, setScreen] = useState("home");
   const [tasks, setTasks] = useState(loadTasks);
+  const [settings, setSettings] = useState(loadSettings);
 
   useEffect(() => { saveTasks(tasks); }, [tasks]);
+  useEffect(() => { saveSettings(settings); }, [settings]);
+
+  // Request notification permission on first load
+  useEffect(() => { requestNotificationPermission(); }, []);
+
+  // Notification checker - runs every 30 seconds
+  useEffect(() => {
+    if (!settings.notifications) return;
+
+    const check = () => {
+      const now = new Date();
+      const currentH = now.getHours();
+      const currentM = now.getMinutes();
+
+      setTasks(prev => prev.map(task => {
+        if (task.done || task.notified) return task;
+        const [taskH, taskM] = task.time.split(":").map(Number);
+        const taskMinutes = taskH * 60 + taskM;
+        const currentMinutes = currentH * 60 + currentM;
+        const diff = taskMinutes - currentMinutes;
+
+        if (diff === settings.antecedencia || (settings.antecedencia === 0 && diff === 0)) {
+          sendNotification(
+            "Task Orange",
+            settings.antecedencia > 0
+              ? `"${task.name}" começa em ${settings.antecedencia} minutos`
+              : `"${task.name}" — é agora!`
+          );
+          if (settings.sound && navigator.vibrate) {
+            navigator.vibrate([200, 100, 200]);
+          }
+          return { ...task, notified: true };
+        }
+        return task;
+      }));
+    };
+
+    check();
+    const interval = setInterval(check, 30000);
+    return () => clearInterval(interval);
+  }, [settings.notifications, settings.antecedencia, settings.sound]);
+
+  // Reset notified flag at midnight
+  useEffect(() => {
+    const checkMidnight = () => {
+      const now = new Date();
+      if (now.getHours() === 0 && now.getMinutes() === 0) {
+        setTasks(prev => prev.map(t => ({ ...t, notified: false, done: t.repeat ? false : t.done })));
+      }
+    };
+    const interval = setInterval(checkMidnight, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const addTask = (task) => setTasks(prev => [...prev, task]);
   const toggleTask = (id) => setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  const deleteTask = (id) => setTasks(prev => prev.filter(t => t.id !== id));
+  const clearDone = () => setTasks(prev => prev.filter(t => !t.done));
 
   return (
     <div style={{
@@ -600,7 +866,12 @@ export default function TaskOrange() {
       )}
       {screen === "timeline" && (
         <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-          <TelaTimeline onNavigate={setScreen} tasks={tasks} onToggleTask={toggleTask} onAddTask={addTask} />
+          <TelaTimeline onNavigate={setScreen} tasks={tasks} onToggleTask={toggleTask} onDeleteTask={deleteTask} onAddTask={addTask} />
+        </div>
+      )}
+      {screen === "config" && (
+        <div style={{ height: "100%", overflowY: "auto" }}>
+          <TelaConfig onNavigate={setScreen} settings={settings} onUpdateSettings={setSettings} tasks={tasks} onClearDone={clearDone} />
         </div>
       )}
     </div>
