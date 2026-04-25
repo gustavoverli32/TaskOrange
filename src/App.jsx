@@ -50,9 +50,12 @@ function GlobalStyles() {
       @keyframes slideUp { from { transform: translateY(100%) } to { transform: translateY(0) } }
       @keyframes slideIn { from { opacity:0; transform: translateX(20px) } to { opacity:1; transform: translateX(0) } }
       * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+      input, select, textarea { font-size: 16px !important; }
       input::placeholder { color: #BBB7B2; }
       body { overscroll-behavior: none; }
       ::-webkit-scrollbar { display: none; }
+      .time-scroll { scroll-snap-type: y mandatory; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+      .time-scroll-item { scroll-snap-align: center; }
     `}</style>
   );
 }
@@ -145,6 +148,43 @@ function ClockSettingIcon({ size = 18, color = GRAY_TEXT }) {
       <circle cx="19" cy="19" r="4" fill="var(--bg, #fff)" stroke={color} strokeWidth="1.5"/>
       <text x="19" y="20.5" textAnchor="middle" fill={color} fontSize="7" fontWeight="600" fontFamily="sans-serif">5</text>
     </svg>
+  );
+}
+
+/* ─── TimePicker (iOS-safe, no input zoom) ─── */
+function TimePicker({ hora, minuto, setHora, setMinuto }) {
+  const incHora = () => { const h = (parseInt(hora || "0") + 1) % 24; setHora(String(h).padStart(2, "0")); };
+  const decHora = () => { const h = (parseInt(hora || "0") - 1 + 24) % 24; setHora(String(h).padStart(2, "0")); };
+  const incMin = () => { const m = (parseInt(minuto || "0") + 5) % 60; setMinuto(String(m).padStart(2, "0")); };
+  const decMin = () => { const m = (parseInt(minuto || "0") - 5 + 60) % 60; setMinuto(String(m).padStart(2, "0")); };
+
+  const btnStyle = {
+    width: 36, height: 28, borderRadius: 8,
+    border: `1px solid ${GRAY_BORDER}`,
+    background: GRAY_BG, color: GRAY_TEXT,
+    fontSize: 18, fontWeight: 400, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    WebkitUserSelect: "none", userSelect: "none",
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        <button onClick={incHora} style={btnStyle}>▲</button>
+        <span style={{ fontSize: 32, fontWeight: 300, color: DARK, width: 48, textAlign: "center", lineHeight: 1 }}>
+          {String(hora).padStart(2, "0")}
+        </span>
+        <button onClick={decHora} style={btnStyle}>▼</button>
+      </div>
+      <span style={{ fontSize: 32, fontWeight: 300, color: DARK, marginBottom: 2 }}>:</span>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        <button onClick={incMin} style={btnStyle}>▲</button>
+        <span style={{ fontSize: 32, fontWeight: 300, color: DARK, width: 48, textAlign: "center", lineHeight: 1 }}>
+          {String(minuto).padStart(2, "0")}
+        </span>
+        <button onClick={decMin} style={btnStyle}>▼</button>
+      </div>
+    </div>
   );
 }
 
@@ -274,27 +314,9 @@ function TelaInicial({ onNavigate, tasks, onAddTask }) {
           Horário
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, marginBottom: 16 }}>
           <AlarmIcon size={22} />
-          <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
-            <input value={hora}
-              onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 2); setHora(v); setSelectedTime(""); }}
-              style={{
-                width: 48, height: 52, textAlign: "center",
-                fontSize: 32, fontWeight: 300, border: "none",
-                background: "transparent", color: DARK, outline: "none",
-              }}
-            />
-            <span style={{ fontSize: 32, fontWeight: 300, color: DARK, marginLeft: -4, marginRight: -4 }}>:</span>
-            <input value={minuto}
-              onChange={e => { const v = e.target.value.replace(/\D/g, "").slice(0, 2); setMinuto(v); setSelectedTime(""); }}
-              style={{
-                width: 48, height: 52, textAlign: "center",
-                fontSize: 32, fontWeight: 300, border: "none",
-                background: "transparent", color: DARK, outline: "none",
-              }}
-            />
-          </div>
+          <TimePicker hora={hora} minuto={minuto} setHora={(v) => { setHora(v); setSelectedTime(""); }} setMinuto={(v) => { setMinuto(v); setSelectedTime(""); }} />
           <ClockIcon size={22} />
         </div>
 
@@ -690,18 +712,10 @@ function ModalNovaTarefa({ onClose, onAdd }) {
 
         <label style={{ fontSize: 11, fontWeight: 600, color: GRAY_TEXT, letterSpacing: 0.5, textTransform: "uppercase" }}>Horário</label>
         <div style={{
-          display: "flex", alignItems: "center", gap: 4,
-          border: `1px solid ${GRAY_BORDER}`, borderRadius: 12,
-          padding: "10px 14px", margin: "8px 0 16px",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          margin: "8px 0 16px", padding: "8px 0",
         }}>
-          <input value={hora} onChange={e => setHora(e.target.value.replace(/\D/g, "").slice(0, 2))}
-            style={{ width: 32, fontSize: 20, fontWeight: 400, border: "none", outline: "none", textAlign: "center", color: DARK }}
-          />
-          <span style={{ fontSize: 20, color: DARK }}>:</span>
-          <input value={minuto} onChange={e => setMinuto(e.target.value.replace(/\D/g, "").slice(0, 2))}
-            style={{ width: 32, fontSize: 20, fontWeight: 400, border: "none", outline: "none", textAlign: "center", color: DARK }}
-          />
-          <div style={{ marginLeft: "auto" }}><ClockIcon size={18} /></div>
+          <TimePicker hora={hora} minuto={minuto} setHora={setHora} setMinuto={setMinuto} />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
