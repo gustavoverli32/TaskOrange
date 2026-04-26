@@ -93,6 +93,9 @@ function MicIcon({size=18,color=GRAY_TEXT}) {
 function XIcon({size=16,color=GRAY_TEXT}) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>);
 }
+function EditIcon({size=16,color=ORANGE}) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>);
+}
 function ChevronIcon({size=16,color=GRAY_TEXT,dir="down"}) {
   const r = dir==="up"?180:0;
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:`rotate(${r}deg)`,transition:"transform 0.2s"}}><polyline points="6 9 12 15 18 9"/></svg>);
@@ -304,10 +307,30 @@ function TelaTimeline({ onNavigate, tasks, onToggleTask, onDeleteTask, onAddTask
 /* ═══════════════════════════════════════════════ */
 /*  TELA EVIDÊNCIAS                               */
 /* ═══════════════════════════════════════════════ */
-function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEvidencia }) {
+function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEvidencia, onUpdateEvidencia }) {
   const [showForm, setShowForm] = useState(false);
+  const [editingEv, setEditingEv] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const handleEdit = (ev) => {
+    setEditingEv({...ev, anexos:[...ev.anexos]});
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setEditingEv(null);
+  };
+
+  const handleSave = (ev) => {
+    if (editingEv) {
+      onUpdateEvidencia(ev);
+    } else {
+      onAddEvidencia(ev);
+    }
+    handleCloseForm();
+  };
 
   return (
     <div style={{background:"#fff",minHeight:"100%",display:"flex",flexDirection:"column",position:"relative"}}>
@@ -373,31 +396,37 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
                     </div>
                   </div>
                 )}
-                <button onClick={()=>setConfirmDelete(ev.id)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:10,background:"#FEF0EC",border:"1px solid #F5C4B3",color:RED,fontSize:13,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                  <TrashIcon size={14}/> Excluir evidência
-                </button>
+                <div style={{display:"flex",gap:8,marginTop:8}}>
+                  <button onClick={()=>handleEdit(ev)} style={{flex:1,padding:"10px",borderRadius:10,background:ORANGE_LIGHT,border:`1px solid ${ORANGE}40`,color:ORANGE,fontSize:13,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                    <EditIcon size={14}/> Editar
+                  </button>
+                  <button onClick={()=>setConfirmDelete(ev.id)} style={{flex:1,padding:"10px",borderRadius:10,background:"#FEF0EC",border:"1px solid #F5C4B3",color:RED,fontSize:13,fontWeight:500,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                    <TrashIcon size={14}/> Excluir
+                  </button>
+                </div>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      <button onClick={()=>setShowForm(true)} style={{position:"absolute",bottom:80,right:20,width:52,height:52,borderRadius:26,background:ORANGE,border:"none",color:"#fff",fontSize:28,fontWeight:300,cursor:"pointer",boxShadow:"0 4px 14px rgba(232,116,12,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+      <button onClick={()=>{setEditingEv(null);setShowForm(true);}} style={{position:"absolute",bottom:80,right:20,width:52,height:52,borderRadius:26,background:ORANGE,border:"none",color:"#fff",fontSize:28,fontWeight:300,cursor:"pointer",boxShadow:"0 4px 14px rgba(232,116,12,0.35)",display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
 
-      {showForm && <ModalNovaEvidencia onClose={()=>setShowForm(false)} onAdd={ev=>{onAddEvidencia(ev);setShowForm(false);}}/>}
+      {showForm && <ModalEvidencia existing={editingEv} onClose={handleCloseForm} onSave={handleSave}/>}
       <BottomNav active="evidencias" onNavigate={onNavigate}/>
     </div>
   );
 }
 
-/* ─── Modal Nova Evidência ─── */
-function ModalNovaEvidencia({ onClose, onAdd }) {
-  const [problema, setProblema] = useState("");
-  const [descricao, setDescricao] = useState("");
-  const [ocorrenciaAberta, setOcorrenciaAberta] = useState(false);
-  const [numeroOcorrencia, setNumeroOcorrencia] = useState("");
-  const [data, setData] = useState(new Date().toISOString().split("T")[0]);
-  const [anexos, setAnexos] = useState([]);
+/* ─── Modal Evidência (criar + editar) ─── */
+function ModalEvidencia({ existing, onClose, onSave }) {
+  const isEdit = !!existing;
+  const [problema, setProblema] = useState(existing?.problema || "");
+  const [descricao, setDescricao] = useState(existing?.descricao || "");
+  const [ocorrenciaAberta, setOcorrenciaAberta] = useState(existing?.ocorrenciaAberta || false);
+  const [numeroOcorrencia, setNumeroOcorrencia] = useState(existing?.numeroOcorrencia || "");
+  const [data, setData] = useState(existing ? existing.data.split("/").reverse().join("-") : new Date().toISOString().split("T")[0]);
+  const [anexos, setAnexos] = useState(existing?.anexos || []);
   const fileRef = useRef(null);
 
   const handleFiles = (e) => {
@@ -412,15 +441,23 @@ function ModalNovaEvidencia({ onClose, onAdd }) {
 
   const removeAnexo = (i) => setAnexos(prev => prev.filter((_,idx) => idx !== i));
 
-  const handleCriar = () => {
+  const handleSave = () => {
     if (!problema.trim()) return;
-    onAdd({ id:Date.now(), problema, descricao, ocorrenciaAberta, numeroOcorrencia:ocorrenciaAberta?numeroOcorrencia:"", data:data.split("-").reverse().join("/"), anexos });
+    onSave({
+      id: existing?.id || Date.now(),
+      problema,
+      descricao,
+      ocorrenciaAberta,
+      numeroOcorrencia: ocorrenciaAberta ? numeroOcorrencia : "",
+      data: data.split("-").reverse().join("/"),
+      anexos,
+    });
   };
 
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"flex-end",zIndex:100,animation:"fadeIn 0.2s ease"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"92vh",background:"#fff",borderRadius:"24px 24px 0 0",padding:"24px 20px 32px",animation:"slideUp 0.3s ease",overflowY:"auto"}}>
-        <h3 style={{fontSize:20,fontWeight:600,color:DARK,margin:"0 0 20px"}}>Nova evidência</h3>
+        <h3 style={{fontSize:20,fontWeight:600,color:DARK,margin:"0 0 20px"}}>{isEdit ? "Editar evidência" : "Nova evidência"}</h3>
 
         <label style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,letterSpacing:0.5,textTransform:"uppercase"}}>Problema *</label>
         <input value={problema} onChange={e=>setProblema(e.target.value)} placeholder="Descreva o problema"
@@ -500,7 +537,7 @@ function ModalNovaEvidencia({ onClose, onAdd }) {
 
         <div style={{display:"flex",gap:12,marginTop:8}}>
           <button onClick={onClose} style={{flex:1,padding:"14px",borderRadius:14,background:"transparent",color:DARK,fontSize:15,fontWeight:600,border:"none",cursor:"pointer"}}>Cancelar</button>
-          <button onClick={handleCriar} style={{flex:1,padding:"14px",borderRadius:14,background:problema.trim()?ORANGE:GRAY_BG,color:problema.trim()?"#fff":GRAY_TEXT,fontSize:15,fontWeight:600,border:"none",cursor:problema.trim()?"pointer":"default",transition:"all 0.2s"}}>Criar evidência</button>
+          <button onClick={handleSave} style={{flex:1,padding:"14px",borderRadius:14,background:problema.trim()?ORANGE:GRAY_BG,color:problema.trim()?"#fff":GRAY_TEXT,fontSize:15,fontWeight:600,border:"none",cursor:problema.trim()?"pointer":"default",transition:"all 0.2s"}}>{isEdit ? "Salvar" : "Criar evidência"}</button>
         </div>
       </div>
     </div>
@@ -738,13 +775,14 @@ export default function TaskOrange() {
   const clearDone = ()=>setTasks(p=>p.filter(t=>!t.done));
   const addEvidencia = ev=>setEvidencias(p=>[ev,...p]);
   const deleteEvidencia = id=>setEvidencias(p=>p.filter(e=>e.id!==id));
+  const updateEvidencia = ev=>setEvidencias(p=>p.map(e=>e.id===ev.id?ev:e));
 
   return (
     <div style={{maxWidth:430,margin:"0 auto",height:"100dvh",background:"#fff",position:"relative",overflow:"hidden"}}>
       <GlobalStyles/>
       {screen==="home" && <div style={{height:"100%",overflowY:"auto"}}><TelaInicial onNavigate={setScreen} tasks={tasks} onAddTask={addTask} tags={tags}/></div>}
       {screen==="timeline" && <div style={{height:"100%",display:"flex",flexDirection:"column"}}><TelaTimeline onNavigate={setScreen} tasks={tasks} onToggleTask={toggleTask} onDeleteTask={deleteTask} onAddTask={addTask} tags={tags}/></div>}
-      {screen==="evidencias" && <div style={{height:"100%",display:"flex",flexDirection:"column"}}><TelaEvidencias onNavigate={setScreen} evidencias={evidencias} onAddEvidencia={addEvidencia} onDeleteEvidencia={deleteEvidencia}/></div>}
+      {screen==="evidencias" && <div style={{height:"100%",display:"flex",flexDirection:"column"}}><TelaEvidencias onNavigate={setScreen} evidencias={evidencias} onAddEvidencia={addEvidencia} onDeleteEvidencia={deleteEvidencia} onUpdateEvidencia={updateEvidencia}/></div>}
       {screen==="config" && <div style={{height:"100%",overflowY:"auto"}}><TelaConfig onNavigate={setScreen} settings={settings} onUpdateSettings={setSettings} tasks={tasks} onClearDone={clearDone} tags={tags} onUpdateTags={setTags}/></div>}
     </div>
   );
