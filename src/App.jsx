@@ -344,29 +344,32 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
         <ConfirmModal title="Excluir evidência?" message="Todos os arquivos anexados serão perdidos." onConfirm={()=>{onDeleteEvidencia(confirmDelete);setConfirmDelete(null);setExpandedId(null);}} onCancel={()=>setConfirmDelete(null)}/>
       )}
 
-      {/* Media Viewer - fullscreen */}
+      {/* Media Viewer - tela inteira substituindo conteúdo (iOS-safe, sem position:fixed) */}
       {viewingMedia && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:300,display:"flex",flexDirection:"column",animation:"fadeIn 0.2s ease"}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",flexShrink:0}}>
+        <div style={{position:"absolute",inset:0,background:"#000",zIndex:300,display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"env(safe-area-inset-top, 12px) 20px 12px",flexShrink:0}}>
             <span style={{color:"#fff",fontSize:14,fontWeight:500,maxWidth:"70%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewingMedia.name}</span>
-            <button onClick={()=>setViewingMedia(null)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:20,width:36,height:36,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-              <XIcon size={18} color="#fff"/>
+            <button onClick={()=>setViewingMedia(null)} style={{background:"rgba(255,255,255,0.2)",border:"none",borderRadius:20,width:40,height:40,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",WebkitAppearance:"none"}}>
+              <XIcon size={20} color="#fff"/>
             </button>
           </div>
-          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 16px 40px",overflow:"auto"}}>
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 12px 40px",overflow:"auto",WebkitOverflowScrolling:"touch"}}>
             {viewingMedia.type.startsWith("image") && (
-              <img src={viewingMedia.url} alt={viewingMedia.name} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8,objectFit:"contain"}}/>
+              <img src={viewingMedia.url} alt={viewingMedia.name} style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:8,objectFit:"contain",WebkitUserSelect:"none"}}/>
             )}
             {viewingMedia.type.startsWith("video") && (
-              <video controls autoPlay playsInline src={viewingMedia.url} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8}}/>
+              <video controls autoPlay playsInline webkit-playsinline="true" src={viewingMedia.url} style={{maxWidth:"100%",maxHeight:"80vh",borderRadius:8,background:"#000"}}/>
             )}
             {viewingMedia.type.startsWith("audio") && (
-              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:"32px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:16,width:"100%",maxWidth:320}}>
+              <div style={{background:"rgba(255,255,255,0.08)",borderRadius:16,padding:"32px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:16,width:"100%",maxWidth:320}}>
                 <span style={{fontSize:48}}>🎵</span>
                 <span style={{color:"#fff",fontSize:15,fontWeight:500,textAlign:"center"}}>{viewingMedia.name}</span>
                 <audio controls autoPlay src={viewingMedia.url} style={{width:"100%"}}/>
               </div>
             )}
+          </div>
+          <div style={{padding:"0 20px env(safe-area-inset-bottom, 20px)",flexShrink:0}}>
+            <button onClick={()=>setViewingMedia(null)} style={{width:"100%",padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:15,fontWeight:600,border:"none",cursor:"pointer"}}>Fechar</button>
           </div>
         </div>
       )}
