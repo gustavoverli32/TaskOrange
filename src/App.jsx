@@ -312,6 +312,7 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
   const [editingEv, setEditingEv] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [viewingMedia, setViewingMedia] = useState(null);
 
   const handleEdit = (ev) => {
     setEditingEv({...ev, anexos:[...ev.anexos]});
@@ -343,6 +344,33 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
         <ConfirmModal title="Excluir evidência?" message="Todos os arquivos anexados serão perdidos." onConfirm={()=>{onDeleteEvidencia(confirmDelete);setConfirmDelete(null);setExpandedId(null);}} onCancel={()=>setConfirmDelete(null)}/>
       )}
 
+      {/* Media Viewer - fullscreen */}
+      {viewingMedia && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:300,display:"flex",flexDirection:"column",animation:"fadeIn 0.2s ease"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 20px",flexShrink:0}}>
+            <span style={{color:"#fff",fontSize:14,fontWeight:500,maxWidth:"70%",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{viewingMedia.name}</span>
+            <button onClick={()=>setViewingMedia(null)} style={{background:"rgba(255,255,255,0.15)",border:"none",borderRadius:20,width:36,height:36,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <XIcon size={18} color="#fff"/>
+            </button>
+          </div>
+          <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",padding:"0 16px 40px",overflow:"auto"}}>
+            {viewingMedia.type.startsWith("image") && (
+              <img src={viewingMedia.url} alt={viewingMedia.name} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8,objectFit:"contain"}}/>
+            )}
+            {viewingMedia.type.startsWith("video") && (
+              <video controls autoPlay playsInline src={viewingMedia.url} style={{maxWidth:"100%",maxHeight:"100%",borderRadius:8}}/>
+            )}
+            {viewingMedia.type.startsWith("audio") && (
+              <div style={{background:"rgba(255,255,255,0.1)",borderRadius:16,padding:"32px 24px",display:"flex",flexDirection:"column",alignItems:"center",gap:16,width:"100%",maxWidth:320}}>
+                <span style={{fontSize:48}}>🎵</span>
+                <span style={{color:"#fff",fontSize:15,fontWeight:500,textAlign:"center"}}>{viewingMedia.name}</span>
+                <audio controls autoPlay src={viewingMedia.url} style={{width:"100%"}}/>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div style={{flex:1,padding:"0 20px",overflowY:"auto"}}>
         {evidencias.length===0 && (<div style={{textAlign:"center",padding:"40px 0",color:GRAY_TEXT,fontSize:15}}>Nenhuma evidência registrada.<br/><span style={{fontSize:13}}>Toque no + para criar.</span></div>)}
 
@@ -367,23 +395,34 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
                 {ev.descricao && (<div style={{padding:"12px 0",fontSize:14,color:DARK,lineHeight:1.6,borderBottom:`1px solid ${GRAY_BORDER}`}}>{ev.descricao}</div>)}
                 {ev.anexos.length>0 && (
                   <div style={{padding:"12px 0"}}>
-                    <div style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Anexos</div>
+                    <div style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}}>Anexos — toque para abrir</div>
                     <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
                       {ev.anexos.map((anexo,i)=>(
-                        <div key={i} style={{borderRadius:10,overflow:"hidden",border:`1px solid ${GRAY_BORDER}`}}>
+                        <div key={i} onClick={()=>setViewingMedia(anexo)} style={{borderRadius:10,overflow:"hidden",border:`1px solid ${GRAY_BORDER}`,cursor:"pointer",position:"relative"}}>
                           {anexo.type.startsWith("image") ? (
-                            <img src={anexo.url} alt={anexo.name} style={{width:80,height:80,objectFit:"cover",display:"block"}}/>
+                            <div style={{position:"relative"}}>
+                              <img src={anexo.url} alt={anexo.name} style={{width:80,height:80,objectFit:"cover",display:"block"}}/>
+                              <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.08)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                <div style={{width:24,height:24,borderRadius:12,background:"rgba(0,0,0,0.4)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>
+                                </div>
+                              </div>
+                            </div>
                           ) : anexo.type.startsWith("video") ? (
                             <div style={{width:80,height:80,background:GRAY_BG,display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:2}}>
-                              <span style={{fontSize:24}}>🎬</span>
+                              <div style={{width:28,height:28,borderRadius:14,background:ORANGE,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                              </div>
                               <span style={{fontSize:9,color:GRAY_TEXT,maxWidth:70,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{anexo.name}</span>
                             </div>
                           ) : anexo.type.startsWith("audio") ? (
-                            <div style={{padding:"8px 12px",background:GRAY_BG,display:"flex",alignItems:"center",gap:6,minWidth:120}}>
-                              <span style={{fontSize:16}}>🎵</span>
+                            <div style={{padding:"8px 12px",background:GRAY_BG,display:"flex",alignItems:"center",gap:8,minWidth:140}}>
+                              <div style={{width:28,height:28,borderRadius:14,background:ORANGE,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                              </div>
                               <div>
                                 <div style={{fontSize:11,color:DARK,fontWeight:500,maxWidth:90,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{anexo.name}</div>
-                                <audio controls src={anexo.url} style={{width:100,height:24,marginTop:4}}/>
+                                <div style={{fontSize:10,color:GRAY_TEXT}}>Toque para ouvir</div>
                               </div>
                             </div>
                           ) : (
