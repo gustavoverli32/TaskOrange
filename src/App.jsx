@@ -17,6 +17,78 @@ function save(key, val) {
   try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
 }
 
+/* ─── IndexedDB for large files (ocorrencias attachments) ─── */
+const DB_NAME = "task-orange-db";
+const DB_VERSION = 1;
+const STORE_NAME = "anexos";
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, DB_VERSION);
+    req.onupgradeneeded = () => { req.result.createObjectStore(STORE_NAME); };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveAnexo(id, data) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).put(data, id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function loadAnexo(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const req = tx.objectStore(STORE_NAME).get(id);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function deleteAnexosForOcorrencia(ocorrenciaId) {
+  const db = await openDB();
+  const tx = db.transaction(STORE_NAME, "readwrite");
+  const store = tx.objectStore(STORE_NAME);
+  const req = store.getAllKeys();
+  req.onsuccess = () => {
+    const keys = req.result.filter(k => String(k).startsWith(`${ocorrenciaId}-`));
+    keys.forEach(k => store.delete(k));
+  };
+}
+
+/* Save ocorrencia: store file data in IndexedDB, metadata in localStorage */
+async function saveOcorrenciaAnexos(ocorrencia) {
+  for (let i = 0; i < ocorrencia.anexos.length; i++) {
+    const a = ocorrencia.anexos[i];
+    if (a.url && a.url.startsWith("data:")) {
+      const storageKey = `${ocorrencia.id}-${i}`;
+      await saveAnexo(storageKey, a.url);
+      a._stored = storageKey;
+      a._urlCached = true;
+    }
+  }
+  return ocorrencia;
+}
+
+async function loadOcorrenciaAnexos(ocorrencia) {
+  for (let i = 0; i < ocorrencia.anexos.length; i++) {
+    const a = ocorrencia.anexos[i];
+    if (a._stored) {
+      try {
+        const url = await loadAnexo(a._stored);
+        if (url) a.url = url;
+      } catch {}
+    }
+  }
+  return ocorrencia;
+}
+
 const DEFAULT_TAGS = ["Eventuais", "Reunião", "Painel CEI", "Outros"];
 
 /* ─── Notifications ─── */
@@ -336,12 +408,12 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
   return (
     <div style={{background:"#fff",minHeight:"100%",display:"flex",flexDirection:"column",position:"relative"}}>
       <div style={{padding:"16px 20px 12px"}}>
-        <h1 style={{fontSize:22,fontWeight:600,color:DARK,margin:"0 0 4px"}}>Evidências</h1>
-        <p style={{fontSize:13,color:GRAY_TEXT,margin:0}}>Ocorrências e registros</p>
+        <h1 style={{fontSize:22,fontWeight:600,color:DARK,margin:"0 0 4px"}}>Ocorrências</h1>
+        <p style={{fontSize:13,color:GRAY_TEXT,margin:0}}>Registros e evidências</p>
       </div>
 
       {confirmDelete && (
-        <ConfirmModal title="Excluir evidência?" message="Todos os arquivos anexados serão perdidos." onConfirm={()=>{onDeleteEvidencia(confirmDelete);setConfirmDelete(null);setExpandedId(null);}} onCancel={()=>setConfirmDelete(null)}/>
+        <ConfirmModal title="Excluir ocorrência?" message="Todos os arquivos anexados serão perdidos." onConfirm={()=>{onDeleteEvidencia(confirmDelete);setConfirmDelete(null);setExpandedId(null);}} onCancel={()=>setConfirmDelete(null)}/>
       )}
 
       {/* Media Viewer - tela inteira substituindo conteúdo (iOS-safe, sem position:fixed) */}
@@ -375,7 +447,7 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
       )}
 
       <div style={{flex:1,padding:"0 20px",overflowY:"auto"}}>
-        {evidencias.length===0 && (<div style={{textAlign:"center",padding:"40px 0",color:GRAY_TEXT,fontSize:15}}>Nenhuma evidência registrada.<br/><span style={{fontSize:13}}>Toque no + para criar.</span></div>)}
+        {evidencias.length===0 && (<div style={{textAlign:"center",padding:"40px 0",color:GRAY_TEXT,fontSize:15}}>Nenhuma ocorrência registrada.<br/><span style={{fontSize:13}}>Toque no + para criar.</span></div>)}
 
         {evidencias.map(ev=>(
           <div key={ev.id} style={{marginBottom:12,border:`1px solid ${ev.ocorrenciaAberta?ORANGE+"40":GRAY_BORDER}`,borderRadius:14,overflow:"hidden",animation:"slideIn 0.3s ease"}}>
@@ -460,7 +532,7 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
   );
 }
 
-/* ─── Modal Evidência (criar + editar) ─── */
+/* ─── Modal Ocorrência (criar + editar) ─── */
 function ModalEvidencia({ existing, onClose, onSave }) {
   const isEdit = !!existing;
   const [problema, setProblema] = useState(existing?.problema || "");
@@ -499,7 +571,7 @@ function ModalEvidencia({ existing, onClose, onSave }) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.35)",display:"flex",alignItems:"flex-end",zIndex:100,animation:"fadeIn 0.2s ease"}} onClick={onClose}>
       <div onClick={e=>e.stopPropagation()} style={{width:"100%",maxHeight:"92vh",background:"#fff",borderRadius:"24px 24px 0 0",padding:"24px 20px 32px",animation:"slideUp 0.3s ease",overflowY:"auto"}}>
-        <h3 style={{fontSize:20,fontWeight:600,color:DARK,margin:"0 0 20px"}}>{isEdit ? "Editar evidência" : "Nova evidência"}</h3>
+        <h3 style={{fontSize:20,fontWeight:600,color:DARK,margin:"0 0 20px"}}>{isEdit ? "Editar ocorrência" : "Nova ocorrência"}</h3>
 
         <label style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,letterSpacing:0.5,textTransform:"uppercase"}}>Problema *</label>
         <input value={problema} onChange={e=>setProblema(e.target.value)} placeholder="Descreva o problema"
@@ -579,7 +651,7 @@ function ModalEvidencia({ existing, onClose, onSave }) {
 
         <div style={{display:"flex",gap:12,marginTop:8}}>
           <button onClick={onClose} style={{flex:1,padding:"14px",borderRadius:14,background:"transparent",color:DARK,fontSize:15,fontWeight:600,border:"none",cursor:"pointer"}}>Cancelar</button>
-          <button onClick={handleSave} style={{flex:1,padding:"14px",borderRadius:14,background:problema.trim()?ORANGE:GRAY_BG,color:problema.trim()?"#fff":GRAY_TEXT,fontSize:15,fontWeight:600,border:"none",cursor:problema.trim()?"pointer":"default",transition:"all 0.2s"}}>{isEdit ? "Salvar" : "Criar evidência"}</button>
+          <button onClick={handleSave} style={{flex:1,padding:"14px",borderRadius:14,background:problema.trim()?ORANGE:GRAY_BG,color:problema.trim()?"#fff":GRAY_TEXT,fontSize:15,fontWeight:600,border:"none",cursor:problema.trim()?"pointer":"default",transition:"all 0.2s"}}>{isEdit ? "Salvar" : "Criar ocorrência"}</button>
         </div>
       </div>
     </div>
@@ -744,7 +816,7 @@ function BottomNav({ active, onNavigate }) {
     { key:"timeline", label:"Timeline", icon:(c,a)=>(
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><line x1="12" y1="2" x2="12" y2="22"/><circle cx="12" cy="6" r="2" fill={a?ORANGE:"none"}/><circle cx="12" cy="12" r="2" fill={a?ORANGE:"none"}/><circle cx="12" cy="18" r="2" fill={a?ORANGE:"none"}/><line x1="14" y1="6" x2="20" y2="6"/><line x1="14" y1="12" x2="20" y2="12"/><line x1="14" y1="18" x2="20" y2="18"/></svg>
     )},
-    { key:"evidencias", label:"Evidências", icon:(c)=>(<EvidenceIcon size={22} color={c}/>)},
+    { key:"evidencias", label:"Ocorrências", icon:(c)=>(<EvidenceIcon size={22} color={c}/>)},
     { key:"config", label:"Config", icon:(c)=>(
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
     )},
@@ -775,39 +847,91 @@ export default function TaskOrange() {
   const [tasks, setTasks] = useState(()=>load("task-orange-tasks",[]));
   const [settings, setSettings] = useState(()=>load("task-orange-settings",{notifications:true,sound:true,antecedencia:5}));
   const [tags, setTags] = useState(()=>load("task-orange-tags",DEFAULT_TAGS));
-  const [evidencias, setEvidencias] = useState(()=>load("task-orange-evidencias",[]));
+  const [evidencias, setEvidencias] = useState([]);
+  const [dbReady, setDbReady] = useState(false);
+
+  // Load ocorrencias from localStorage then hydrate files from IndexedDB
+  useEffect(()=>{
+    (async()=>{
+      const saved = load("task-orange-evidencias",[]);
+      const hydrated = [];
+      for(const ev of saved){
+        try { await loadOcorrenciaAnexos(ev); } catch{}
+        hydrated.push(ev);
+      }
+      setEvidencias(hydrated);
+      setDbReady(true);
+    })();
+  },[]);
 
   useEffect(()=>{ save("task-orange-tasks",tasks); },[tasks]);
   useEffect(()=>{ save("task-orange-settings",settings); },[settings]);
   useEffect(()=>{ save("task-orange-tags",tags); },[tags]);
-  useEffect(()=>{ save("task-orange-evidencias",evidencias); },[evidencias]);
+
+  // Save ocorrencias: metadata to localStorage, files to IndexedDB
+  useEffect(()=>{
+    if(!dbReady) return;
+    (async()=>{
+      const toSave = [];
+      for(const ev of evidencias){
+        const copy = {...ev, anexos: ev.anexos.map(a=>({name:a.name,type:a.type,_stored:a._stored||null}))};
+        toSave.push(copy);
+        // Save actual file data to IndexedDB
+        for(let i=0;i<ev.anexos.length;i++){
+          const a = ev.anexos[i];
+          if(a.url && a.url.startsWith("data:")){
+            const key = `${ev.id}-${i}`;
+            try{ await saveAnexo(key, a.url); }catch{}
+            if(!toSave[toSave.length-1].anexos[i]._stored) toSave[toSave.length-1].anexos[i]._stored = key;
+          }
+        }
+      }
+      save("task-orange-evidencias", toSave);
+    })();
+  },[evidencias, dbReady]);
+
   useEffect(()=>{ requestNotificationPermission(); },[]);
 
+  // Notification checker - every 15 seconds for reliability
   useEffect(()=>{
     if(!settings.notifications) return;
     const check = () => {
-      const now=new Date(); const cH=now.getHours(); const cM=now.getMinutes();
+      const now=new Date();
+      const currentMin = now.getHours()*60+now.getMinutes();
       setTasks(prev=>prev.map(task=>{
         if(task.done||task.notified) return task;
         const [tH,tM]=task.time.split(":").map(Number);
-        const diff=(tH*60+tM)-(cH*60+cM);
-        if(diff===settings.antecedencia||(settings.antecedencia===0&&diff===0)){
-          sendNotification("Task Orange",settings.antecedencia>0?`"${task.name}" começa em ${settings.antecedencia} min`:`"${task.name}" — é agora!`);
+        const taskMin = tH*60+tM;
+        const diff = taskMin - currentMin;
+        const target = settings.antecedencia || 0;
+        if(diff >= 0 && diff <= target + 1 && diff <= target){
+          sendNotification("Task Orange 🍊",target>0?`"${task.name}" começa em ${target} min`:`"${task.name}" — é agora!`);
           if(settings.sound&&navigator.vibrate) navigator.vibrate([200,100,200]);
           return {...task,notified:true};
         }
         return task;
       }));
     };
-    check(); const i=setInterval(check,30000); return ()=>clearInterval(i);
+    check();
+    const i=setInterval(check,15000);
+    return ()=>clearInterval(i);
   },[settings.notifications,settings.antecedencia,settings.sound]);
 
+  // Daily reset - uses stored date so it works even if app wasn't open at midnight
   useEffect(()=>{
-    const i=setInterval(()=>{
-      const now=new Date();
-      if(now.getHours()===0&&now.getMinutes()===0)
-        setTasks(prev=>prev.map(t=>({...t,notified:false,done:t.repeat?false:t.done})));
-    },60000);
+    const checkNewDay = () => {
+      const today = new Date().toISOString().split("T")[0];
+      const lastReset = load("task-orange-last-reset","");
+      if(lastReset && lastReset !== today){
+        setTasks(prev=>prev.map(t=>{
+          if(t.repeat) return {...t, done:false, notified:false};
+          return {...t, notified:false};
+        }));
+      }
+      save("task-orange-last-reset", today);
+    };
+    checkNewDay();
+    const i=setInterval(checkNewDay,60000);
     return ()=>clearInterval(i);
   },[]);
 
@@ -816,7 +940,10 @@ export default function TaskOrange() {
   const deleteTask = id=>setTasks(p=>p.filter(t=>t.id!==id));
   const clearDone = ()=>setTasks(p=>p.filter(t=>!t.done));
   const addEvidencia = ev=>setEvidencias(p=>[ev,...p]);
-  const deleteEvidencia = id=>setEvidencias(p=>p.filter(e=>e.id!==id));
+  const deleteEvidencia = id=>{
+    deleteAnexosForOcorrencia(id).catch(()=>{});
+    setEvidencias(p=>p.filter(e=>e.id!==id));
+  };
   const updateEvidencia = ev=>setEvidencias(p=>p.map(e=>e.id===ev.id?ev:e));
 
   return (
