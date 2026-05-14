@@ -168,6 +168,22 @@ function XIcon({size=16,color=GRAY_TEXT}) {
 function EditIcon({size=16,color=ORANGE}) {
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>);
 }
+function DownloadIcon({size=16,color="#fff"}) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>);
+}
+function IntervalIcon({size=18,color=GRAY_TEXT}) {
+  return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="M12 2v2"/><path d="M12 20v2"/></svg>);
+}
+
+/* ─── Download helper ─── */
+function downloadFile(url, filename) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
 function ChevronIcon({size=16,color=GRAY_TEXT,dir="down"}) {
   const r = dir==="up"?180:0;
   return (<svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{transform:`rotate(${r}deg)`,transition:"transform 0.2s"}}><polyline points="6 9 12 15 18 9"/></svg>);
@@ -224,7 +240,7 @@ function ConfirmModal({ title, message, onConfirm, onCancel, confirmText="Exclui
 /* ═══════════════════════════════════════════════ */
 /*  TELA INICIAL                                  */
 /* ═══════════════════════════════════════════════ */
-function TelaInicial({ onNavigate, tasks, onAddTask, tags }) {
+function TelaInicial({ onNavigate, tasks, onAddTask, tags, intervalTasks, onAddIntervalTask, onToggleIntervalTask, onDeleteIntervalTask }) {
   const [nome, setNome] = useState("");
   const [selectedTag, setSelectedTag] = useState(null);
   const [hora, setHora] = useState("10");
@@ -232,6 +248,8 @@ function TelaInicial({ onNavigate, tasks, onAddTask, tags }) {
   const [selectedTime, setSelectedTime] = useState("10:00");
   const [repetir, setRepetir] = useState(true);
   const [feedback, setFeedback] = useState(false);
+  const [modo, setModo] = useState("horario"); // "horario" ou "intervalo"
+  const [intervalo, setIntervalo] = useState(60); // em minutos
 
   const quickTimes = ["09:00","10:00","12:30","14:00","16:30"];
   const nextTask = tasks.filter(t=>!t.done).sort((a,b)=>a.time.localeCompare(b.time))[0];
@@ -248,10 +266,19 @@ function TelaInicial({ onNavigate, tasks, onAddTask, tags }) {
 
   const handleCriar = () => {
     if(!nome.trim()) return;
-    onAddTask({ id:Date.now(), name:nome, time:`${hora.padStart(2,"0")}:${minuto.padStart(2,"0")}`, tag:selectedTag, repeat:repetir, done:false, notified:false });
+    if(modo === "intervalo") {
+      onAddIntervalTask({ id:Date.now(), name:nome, intervalMin:intervalo, tag:selectedTag, active:true, lastNotified:null });
+    } else {
+      onAddTask({ id:Date.now(), name:nome, time:`${hora.padStart(2,"0")}:${minuto.padStart(2,"0")}`, tag:selectedTag, repeat:repetir, done:false, notified:false });
+    }
     setNome(""); setSelectedTag(null); setFeedback(true);
     setTimeout(()=>setFeedback(false),2000);
   };
+
+  const intervalOptions = [
+    {label:"15min",value:15},{label:"30min",value:30},{label:"1h",value:60},
+    {label:"2h",value:120},{label:"3h",value:180},{label:"4h",value:240},
+  ];
 
   return (
     <div style={{background:"#fff",minHeight:"100%",display:"flex",flexDirection:"column"}}>
@@ -279,7 +306,7 @@ function TelaInicial({ onNavigate, tasks, onAddTask, tags }) {
           onFocus={e=>e.target.style.borderColor=ORANGE} onBlur={e=>e.target.style.borderColor=GRAY_BORDER}
         />
 
-        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:24}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:20}}>
           {tags.map(tag=>(
             <button key={tag} onClick={()=>setSelectedTag(selectedTag===tag?null:tag)}
               style={{padding:"8px 16px",borderRadius:20,border:`1px solid ${selectedTag===tag?ORANGE:GRAY_BORDER}`,background:selectedTag===tag?ORANGE_LIGHT:"#fff",color:selectedTag===tag?ORANGE:DARK,fontSize:13,fontWeight:500,cursor:"pointer",transition:"all 0.15s"}}
@@ -287,32 +314,83 @@ function TelaInicial({ onNavigate, tasks, onAddTask, tags }) {
           ))}
         </div>
 
-        <div style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,letterSpacing:0.5,textTransform:"uppercase",marginBottom:12}}>Horário</div>
-
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:16}}>
-          <AlarmIcon size={22}/>
-          <TimePicker hora={hora} minuto={minuto} setHora={v=>{setHora(v);setSelectedTime("");}} setMinuto={v=>{setMinuto(v);setSelectedTime("");}} step={1}/>
-          <ClockIcon size={22}/>
+        {/* Mode selector */}
+        <div style={{display:"flex",gap:0,marginBottom:20,borderRadius:12,overflow:"hidden",border:`1px solid ${GRAY_BORDER}`}}>
+          <button onClick={()=>setModo("horario")} style={{flex:1,padding:"10px",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",background:modo==="horario"?ORANGE:"#fff",color:modo==="horario"?"#fff":GRAY_TEXT,transition:"all 0.15s"}}>
+            ⏰ Horário fixo
+          </button>
+          <button onClick={()=>setModo("intervalo")} style={{flex:1,padding:"10px",border:"none",fontSize:13,fontWeight:600,cursor:"pointer",background:modo==="intervalo"?ORANGE:"#fff",color:modo==="intervalo"?"#fff":GRAY_TEXT,transition:"all 0.15s"}}>
+            🔄 A cada intervalo
+          </button>
         </div>
 
-        <div style={{display:"flex",gap:6,marginBottom:24,justifyContent:"center",flexWrap:"wrap"}}>
-          {quickTimes.map(t=>(
-            <button key={t} onClick={()=>{setHora(t.split(":")[0]);setMinuto(t.split(":")[1]);setSelectedTime(t);}}
-              style={{padding:"6px 12px",borderRadius:16,border:`1.5px solid ${selectedTime===t?ORANGE:GRAY_BORDER}`,background:selectedTime===t?ORANGE:"transparent",color:selectedTime===t?"#fff":GRAY_TEXT,fontSize:13,fontWeight:500,cursor:"pointer",transition:"all 0.15s"}}
-            >{t}</button>
-          ))}
-        </div>
+        {modo === "horario" ? (<>
+          <div style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,letterSpacing:0.5,textTransform:"uppercase",marginBottom:12}}>Horário</div>
 
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24}}>
-          <div style={{display:"flex",alignItems:"center",gap:12}}>
-            <RepeatIcon size={18}/>
-            <div>
-              <div style={{fontSize:15,color:DARK,fontWeight:500}}>Repetir todos os dias</div>
-              <div style={{fontSize:12,color:GRAY_TEXT}}>Tarefa fixa de rotina</div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:16}}>
+            <AlarmIcon size={22}/>
+            <TimePicker hora={hora} minuto={minuto} setHora={v=>{setHora(v);setSelectedTime("");}} setMinuto={v=>{setMinuto(v);setSelectedTime("");}} step={1}/>
+            <ClockIcon size={22}/>
+          </div>
+
+          <div style={{display:"flex",gap:6,marginBottom:24,justifyContent:"center",flexWrap:"wrap"}}>
+            {quickTimes.map(t=>(
+              <button key={t} onClick={()=>{setHora(t.split(":")[0]);setMinuto(t.split(":")[1]);setSelectedTime(t);}}
+                style={{padding:"6px 12px",borderRadius:16,border:`1.5px solid ${selectedTime===t?ORANGE:GRAY_BORDER}`,background:selectedTime===t?ORANGE:"transparent",color:selectedTime===t?"#fff":GRAY_TEXT,fontSize:13,fontWeight:500,cursor:"pointer",transition:"all 0.15s"}}
+              >{t}</button>
+            ))}
+          </div>
+
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <RepeatIcon size={18}/>
+              <div>
+                <div style={{fontSize:15,color:DARK,fontWeight:500}}>Repetir todos os dias</div>
+                <div style={{fontSize:12,color:GRAY_TEXT}}>Tarefa fixa de rotina</div>
+              </div>
+            </div>
+            <Toggle on={repetir} onToggle={()=>setRepetir(!repetir)}/>
+          </div>
+        </>) : (<>
+          <div style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,letterSpacing:0.5,textTransform:"uppercase",marginBottom:12}}>Repetir a cada</div>
+
+          <div style={{display:"flex",flexWrap:"wrap",gap:8,marginBottom:16,justifyContent:"center"}}>
+            {intervalOptions.map(opt=>(
+              <button key={opt.value} onClick={()=>setIntervalo(opt.value)}
+                style={{padding:"10px 18px",borderRadius:12,border:`1.5px solid ${intervalo===opt.value?ORANGE:GRAY_BORDER}`,background:intervalo===opt.value?ORANGE:"#fff",color:intervalo===opt.value?"#fff":DARK,fontSize:15,fontWeight:500,cursor:"pointer",transition:"all 0.15s"}}
+              >{opt.label}</button>
+            ))}
+          </div>
+
+          <div style={{background:ORANGE_LIGHT,borderRadius:12,padding:"12px 16px",marginBottom:20}}>
+            <div style={{fontSize:13,color:ORANGE,lineHeight:1.5}}>
+              <IntervalIcon size={14} color={ORANGE}/>{" "}
+              O app vai te alertar a cada <strong>{intervalo < 60 ? `${intervalo} minutos` : `${intervalo/60}h`}</strong> enquanto estiver ativo.
             </div>
           </div>
-          <Toggle on={repetir} onToggle={()=>setRepetir(!repetir)}/>
-        </div>
+        </>)}
+
+        {/* Active interval tasks */}
+        {intervalTasks.length > 0 && (
+          <div style={{marginBottom:16}}>
+            <div style={{fontSize:11,fontWeight:600,color:GRAY_TEXT,letterSpacing:0.5,textTransform:"uppercase",marginBottom:8}}>Alertas por intervalo ativos</div>
+            {intervalTasks.map(it=>(
+              <div key={it.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",marginBottom:6,borderRadius:10,background:it.active?ORANGE_LIGHT:GRAY_BG,border:`1px solid ${it.active?ORANGE+"30":GRAY_BORDER}`}}>
+                <div style={{display:"flex",alignItems:"center",gap:8,flex:1}}>
+                  <IntervalIcon size={16} color={it.active?ORANGE:GRAY_TEXT}/>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:500,color:DARK}}>{it.name}</div>
+                    <div style={{fontSize:11,color:GRAY_TEXT}}>A cada {it.intervalMin<60?`${it.intervalMin}min`:`${it.intervalMin/60}h`}</div>
+                  </div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <Toggle on={it.active} onToggle={()=>onToggleIntervalTask(it.id)}/>
+                  <button onClick={()=>onDeleteIntervalTask(it.id)} style={{background:"none",border:"none",cursor:"pointer",padding:4}}><TrashIcon size={14}/></button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{flex:1}}/>
@@ -440,8 +518,11 @@ function TelaEvidencias({ onNavigate, evidencias, onAddEvidencia, onDeleteEviden
               </div>
             )}
           </div>
-          <div style={{padding:"0 20px env(safe-area-inset-bottom, 20px)",flexShrink:0}}>
-            <button onClick={()=>setViewingMedia(null)} style={{width:"100%",padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:15,fontWeight:600,border:"none",cursor:"pointer"}}>Fechar</button>
+          <div style={{padding:"0 20px env(safe-area-inset-bottom, 20px)",flexShrink:0,display:"flex",gap:10}}>
+            <button onClick={()=>downloadFile(viewingMedia.url,viewingMedia.name)} style={{flex:1,padding:"14px",borderRadius:14,background:ORANGE,color:"#fff",fontSize:15,fontWeight:600,border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+              <DownloadIcon size={18}/> Baixar
+            </button>
+            <button onClick={()=>setViewingMedia(null)} style={{flex:1,padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.15)",color:"#fff",fontSize:15,fontWeight:600,border:"none",cursor:"pointer"}}>Fechar</button>
           </div>
         </div>
       )}
@@ -847,6 +928,7 @@ export default function TaskOrange() {
   const [tasks, setTasks] = useState(()=>load("task-orange-tasks",[]));
   const [settings, setSettings] = useState(()=>load("task-orange-settings",{notifications:true,sound:true,antecedencia:5}));
   const [tags, setTags] = useState(()=>load("task-orange-tags",DEFAULT_TAGS));
+  const [intervalTasks, setIntervalTasks] = useState(()=>load("task-orange-intervals",[]));
   const [evidencias, setEvidencias] = useState([]);
   const [dbReady, setDbReady] = useState(false);
 
@@ -867,6 +949,7 @@ export default function TaskOrange() {
   useEffect(()=>{ save("task-orange-tasks",tasks); },[tasks]);
   useEffect(()=>{ save("task-orange-settings",settings); },[settings]);
   useEffect(()=>{ save("task-orange-tags",tags); },[tags]);
+  useEffect(()=>{ save("task-orange-intervals",intervalTasks); },[intervalTasks]);
 
   // Save ocorrencias: metadata to localStorage, files to IndexedDB
   useEffect(()=>{
@@ -876,7 +959,6 @@ export default function TaskOrange() {
       for(const ev of evidencias){
         const copy = {...ev, anexos: ev.anexos.map(a=>({name:a.name,type:a.type,_stored:a._stored||null}))};
         toSave.push(copy);
-        // Save actual file data to IndexedDB
         for(let i=0;i<ev.anexos.length;i++){
           const a = ev.anexos[i];
           if(a.url && a.url.startsWith("data:")){
@@ -892,7 +974,7 @@ export default function TaskOrange() {
 
   useEffect(()=>{ requestNotificationPermission(); },[]);
 
-  // Notification checker - every 15 seconds for reliability
+  // Fixed-time notification checker - every 15 seconds
   useEffect(()=>{
     if(!settings.notifications) return;
     const check = () => {
@@ -917,7 +999,29 @@ export default function TaskOrange() {
     return ()=>clearInterval(i);
   },[settings.notifications,settings.antecedencia,settings.sound]);
 
-  // Daily reset - uses stored date so it works even if app wasn't open at midnight
+  // Interval tasks notification checker - every 30 seconds
+  useEffect(()=>{
+    if(!settings.notifications) return;
+    const check = () => {
+      const now = Date.now();
+      setIntervalTasks(prev=>prev.map(it=>{
+        if(!it.active) return it;
+        const last = it.lastNotified || (now - it.intervalMin * 60000); // first time: notify immediately
+        const elapsed = now - last;
+        if(elapsed >= it.intervalMin * 60000){
+          sendNotification("🔄 Lembrete recorrente",`"${it.name}" — hora de verificar!`);
+          if(settings.sound&&navigator.vibrate) navigator.vibrate([200,100,200]);
+          return {...it, lastNotified: now};
+        }
+        return it;
+      }));
+    };
+    check();
+    const i=setInterval(check,30000);
+    return ()=>clearInterval(i);
+  },[settings.notifications,settings.sound]);
+
+  // Daily reset
   useEffect(()=>{
     const checkNewDay = () => {
       const today = new Date().toISOString().split("T")[0];
@@ -927,6 +1031,8 @@ export default function TaskOrange() {
           if(t.repeat) return {...t, done:false, notified:false};
           return {...t, notified:false};
         }));
+        // Reset interval lastNotified so they start fresh each day
+        setIntervalTasks(prev=>prev.map(it=>({...it, lastNotified:null})));
       }
       save("task-orange-last-reset", today);
     };
@@ -939,6 +1045,9 @@ export default function TaskOrange() {
   const toggleTask = id=>setTasks(p=>p.map(t=>t.id===id?{...t,done:!t.done}:t));
   const deleteTask = id=>setTasks(p=>p.filter(t=>t.id!==id));
   const clearDone = ()=>setTasks(p=>p.filter(t=>!t.done));
+  const addIntervalTask = t=>setIntervalTasks(p=>[...p,t]);
+  const toggleIntervalTask = id=>setIntervalTasks(p=>p.map(t=>t.id===id?{...t,active:!t.active,lastNotified:null}:t));
+  const deleteIntervalTask = id=>setIntervalTasks(p=>p.filter(t=>t.id!==id));
   const addEvidencia = ev=>setEvidencias(p=>[ev,...p]);
   const deleteEvidencia = id=>{
     deleteAnexosForOcorrencia(id).catch(()=>{});
@@ -949,7 +1058,7 @@ export default function TaskOrange() {
   return (
     <div style={{maxWidth:430,margin:"0 auto",height:"100dvh",background:"#fff",position:"relative",overflow:"hidden"}}>
       <GlobalStyles/>
-      {screen==="home" && <div style={{height:"100%",overflowY:"auto"}}><TelaInicial onNavigate={setScreen} tasks={tasks} onAddTask={addTask} tags={tags}/></div>}
+      {screen==="home" && <div style={{height:"100%",overflowY:"auto"}}><TelaInicial onNavigate={setScreen} tasks={tasks} onAddTask={addTask} tags={tags} intervalTasks={intervalTasks} onAddIntervalTask={addIntervalTask} onToggleIntervalTask={toggleIntervalTask} onDeleteIntervalTask={deleteIntervalTask}/></div>}
       {screen==="timeline" && <div style={{height:"100%",display:"flex",flexDirection:"column"}}><TelaTimeline onNavigate={setScreen} tasks={tasks} onToggleTask={toggleTask} onDeleteTask={deleteTask} onAddTask={addTask} tags={tags}/></div>}
       {screen==="evidencias" && <div style={{height:"100%",display:"flex",flexDirection:"column"}}><TelaEvidencias onNavigate={setScreen} evidencias={evidencias} onAddEvidencia={addEvidencia} onDeleteEvidencia={deleteEvidencia} onUpdateEvidencia={updateEvidencia}/></div>}
       {screen==="config" && <div style={{height:"100%",overflowY:"auto"}}><TelaConfig onNavigate={setScreen} settings={settings} onUpdateSettings={setSettings} tasks={tasks} onClearDone={clearDone} tags={tags} onUpdateTags={setTags}/></div>}
